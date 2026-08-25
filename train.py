@@ -32,6 +32,28 @@ try:
 except ImportError:
     TENSORBOARD_FOUND = False
 
+def _as_float(value):
+    if torch.is_tensor(value):
+        if value.numel() != 1:
+            return None
+        return value.detach().item()
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def log_tb_scalars(tb_writer, tb_dict, iteration, extra=None):
+    if tb_writer is None:
+        return
+    payload = dict(tb_dict)
+    if extra:
+        payload.update(extra)
+    for key, value in payload.items():
+        scalar = _as_float(value)
+        if scalar is None:
+            continue
+        tb_writer.add_scalar(key, scalar, iteration)
+
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, checkpoint_refgs, model_path, debug_from=None):
     first_iter = 0
@@ -129,7 +151,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     gaussians.update_bvh()
 
             if iteration % 500 == 0 or iteration == first_iter + 1:
-                save_training_vis(viewpoint_cam, gaussians, background, render_ir, pipe, opt, iteration)
+                save_training_vis(viewpoint_cam, gaussians, background, render_ir, pipe, opt, iteration, tb_writer)
 
             ema_loss_for_log = 0.4 * loss + 0.6 * ema_loss_for_log
             ema_dist_for_log = 0.4 * dist_loss + 0.6 * ema_dist_for_log
@@ -144,6 +166,18 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 ema_psnr_for_log = 0.4 * psnr(image, gt_image).mean().double().item() + 0.6 * ema_psnr_for_log
             
             if iteration % 10 == 0:
+                log_tb_scalars(
+                    tb_writer,
+                    {f"train/{k}": v for k, v in tb_dict.items()},
+                    iteration,
+                    extra={
+                        "ema/loss": ema_loss_for_log,
+                        "ema/dist": ema_dist_for_log,
+                        "ema/normal": ema_normal_for_log,
+                        "ema/psnr": ema_psnr_for_log,
+                        "test/psnr": psnr_test,
+                    },
+                )
                 loss_dict = {
                     "Loss": f"{ema_loss_for_log:.{5}f}",
                     "Distort": f"{ema_dist_for_log:.{5}f}",
@@ -168,14 +202,20 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 
             if iteration in testing_iterations:
                 psnr_test = evaluate_psnr(scene, render_ir, {"pipe": pipe, "bg_color": background, "opt": opt}, iteration)
+                if tb_writer:
+                    tb_writer.add_scalar("test/psnr", _as_float(psnr_test), iteration)
         iteration += 1
+
+    if tb_writer:
+        tb_writer.flush()
+        tb_writer.close()
 
 def set_gaussian_para(gaussians, opt):
     gaussians.init_base_color_value = opt.init_base_color_value
     gaussians.init_metallic_value = opt.init_metallic_value
     gaussians.init_roughness_value = opt.init_roughness_value
 
-def save_training_vis(viewpoint_cam, gaussians, background, render_fn, pipe, opt, iteration):
+def save_training_vis(viewpoint_cam, gaussians, background, render_fn, pipe, opt, iteration, tb_writer=None):
     with torch.no_grad():
         render_pkg = render_fn(viewpoint_cam, gaussians, pipe, background, opt=opt)
 
@@ -202,20 +242,24 @@ def save_training_vis(viewpoint_cam, gaussians, background, render_fn, pipe, opt
             render_pkg["render_env"],
         ]
             
-        grid = torch.stack(visualization_list, dim=0)
-        grid = make_grid(grid, nrow=4)
-        scale = grid.shape[-2] / 1600
-        grid = F.interpolate(grid[None], (int(grid.shape[-2] / scale), int(grid.shape[-1] / scale)))[0]
-        save_image(grid, os.path.join(args.visualize_path, f"{iteration:06d}.png"))
+        vis_grid = torch.stack(visualization_list, dim=0)
+        vis_grid = make_grid(vis_grid, nrow=4)
+        scale = vis_grid.shape[-2] / 1600
+        vis_grid = F.interpolate(vis_grid[None], (int(vis_grid.shape[-2] / scale), int(vis_grid.shape[-1] / scale)))[0]
+        # save_image(vis_grid, os.path.join(args.visualize_path, f"{iteration:06d}.png"))
+        if tb_writer is not None:
+            tb_writer.add_image("vis/render", vis_grid.detach().clamp(0, 1).cpu(), iteration)
 
         env_dict = gaussians.render_env_map()
 
-        grid = [
+        env_grid = [
             rgb_to_srgb(env_dict["env1"].permute(2, 0, 1)),
             rgb_to_srgb(env_dict["env2"].permute(2, 0, 1)),
         ]
-        grid = make_grid(grid, nrow=1, padding=10)
-        save_image(grid, os.path.join(args.visualize_path, f"{iteration:06d}_env.png"))
+        env_grid = make_grid(env_grid, nrow=1, padding=10)
+        # save_image(env_grid, os.path.join(args.visualize_path, f"{iteration:06d}_env.png"))
+        if tb_writer is not None:
+            tb_writer.add_image("vis/envmap", env_grid.detach().clamp(0, 1).cpu(), iteration)
 
       
 NORM_CONDITION_OUTSIDE = False
