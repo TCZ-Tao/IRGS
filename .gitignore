@@ -16,3 +16,6 @@ snapshot_bw.dump
 total_results
 outputs
 composite/
+CLAUDE.md
+.rtk/
+.codegraph/

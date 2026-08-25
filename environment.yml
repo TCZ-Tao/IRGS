@@ -24,3 +24,9 @@ dependencies:
     - submodules/simple-knn
     - plyfile
     - opencv-python
+    # from refgaussian
+    - kornia==0.7.3
+    - git+https://github.com/NVlabs/nvdiffrast.git@v0.3.1
+    - pyexr==0.5.0
+    - protobuf==4.25.9
+    - tensorboard==2.14.0
