@@ -360,6 +360,80 @@ def load_mask_bool(mask_file):
 
     return mask
 
+
+def resolve_gt_path(source_path, file_path, kind, envname=None, frame_idx=None):
+    """Resolve a GT image path, trying original layouts first then channel folders.
+
+    Original Syn4: test/000_albedo.png, test/000_rgba.png, test_rli/envmap6_000.png
+    Original TensoIR: test_000/albedo.png, test_000/rgba_bridge.png
+    New BlenderNeRF G-buffer: test/albedo/0001.png, test/rgba/0001.png,
+        test_rli/envmap6/0001.png
+    """
+    rel = file_path.lstrip("./").replace("\\", "/")
+    raw_name = rel.split("/")[-1]
+    stem = os.path.splitext(raw_name)[0]
+    split = "test"
+    for part in rel.split("/"):
+        if part in ("train", "test", "val"):
+            split = part
+            break
+
+    def _join(*parts):
+        return os.path.normpath(os.path.join(source_path, *parts))
+
+    candidates = []
+    if kind == "rgba":
+        candidates += [
+            _join("test/" + raw_name + "_rgba.png"),
+            _join(rel if rel.lower().endswith((".png", ".exr", ".jpg", ".jpeg")) else rel + ".png"),
+            _join(split, "rgba", stem + ".png"),
+        ]
+    elif kind == "albedo":
+        candidates += [
+            _join("test/" + raw_name + "_albedo.png"),
+            _join(rel.replace("rgba", "albedo.png")),
+            _join(split, "albedo", stem + ".png"),
+        ]
+    elif kind == "roughness":
+        candidates += [
+            _join("test/" + raw_name + "_rough.png"),
+            _join(split, "roughness", stem + ".png"),
+            _join(rel.replace("/rgba/", "/roughness/")),
+        ]
+    elif kind == "normal":
+        candidates += [
+            _join(rel.replace("rgba", "normal.png")),
+            _join(split, "shading_normal", stem + ".png"),
+            _join(split, "geometric_normal", stem + ".png"),
+            _join(split, "normal", stem + ".png"),
+        ]
+    elif kind == "relight":
+        if envname is None:
+            raise ValueError("envname is required for relight GT")
+        candidates.append(_join("test_rli/" + envname + "_" + raw_name + ".png"))
+        candidates.append(_join("test_rli", envname, stem + ".png"))
+        if frame_idx is not None:
+            candidates.append(_join(f"test_{frame_idx:03}/" + raw_name + "_" + envname + ".png"))
+        parent = os.path.dirname(rel)
+        candidates += [
+            _join(parent, f"rgba_{envname}.png"),
+            _join("test_rli", f"{envname}_{stem}.png"),
+            _join(split, envname, stem + ".png"),
+        ]
+    else:
+        raise ValueError("Unknown GT kind: {}".format(kind))
+
+    tried = []
+    for cand in candidates:
+        if cand in tried:
+            continue
+        tried.append(cand)
+        if os.path.isfile(cand):
+            return cand
+    raise FileNotFoundError(
+        "Cannot find {} GT for '{}'. Tried:\n  {}".format(kind, file_path, "\n  ".join(tried))
+    )
+
 def readCamerasFromTransforms3(path, transformsfile, white_background, extension=".png", debug=False):
     cam_infos = []
 

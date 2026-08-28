@@ -15,7 +15,7 @@ from tqdm import tqdm
 from lpipsPyTorch import lpips
 from utils.loss_utils import ssim
 from utils.image_utils import psnr
-from scene.dataset_readers import load_img_rgb
+from scene.dataset_readers import load_img_rgb, resolve_gt_path
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -82,7 +82,7 @@ if __name__ == '__main__':
         R = np.transpose(w2c[:3, :3])  # R is stored transposed due to 'glm' in CUDA code
         T = w2c[:3, 3]
 
-        albedo_path = os.path.join(args.source_path, "test/" + frame["file_path"].split("/")[-1] + "_albedo.png")
+        albedo_path = resolve_gt_path(args.source_path, frame["file_path"], "albedo")
         gt_albedo_np = load_img_rgb(albedo_path)
         mask = torch.from_numpy(gt_albedo_np[..., 3:4]).permute(2, 0, 1).float().cuda()
         gt_albedo = torch.from_numpy(gt_albedo_np[..., :3] * gt_albedo_np[..., 3:4]).permute(2, 0, 1).float().cuda()

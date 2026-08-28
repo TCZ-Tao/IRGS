@@ -17,7 +17,7 @@ from lpipsPyTorch import lpips
 from utils.loss_utils import ssim
 from utils.image_utils import psnr
 from utils.system_utils import Timing
-from scene.dataset_readers import load_img_rgb
+from scene.dataset_readers import load_img_rgb, resolve_gt_path
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -134,7 +134,7 @@ if __name__ == '__main__':
             
         envname = os.path.splitext(os.path.basename(task_dict[task_name]["envmap_path"]))[0]
         for idx, frame in enumerate(tqdm(frames, leave=False)):
-            image_path = os.path.join(args.source_path, f"test_{idx:03}/" + frame["file_path"].split("/")[-1] + "_" + envname + ".png")
+            image_path = resolve_gt_path(args.source_path, frame["file_path"], "relight", envname=envname, frame_idx=idx)
             # NeRF 'transform_matrix' is a camera-to-world transform
             c2w = np.array(frame["transform_matrix"])
             # change from OpenGL/Blender camera axes (Y up, Z back) to COLMAP (Y down, Z forward)
