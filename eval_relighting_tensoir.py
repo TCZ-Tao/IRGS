@@ -65,8 +65,10 @@ if __name__ == '__main__':
     fovx = contents["camera_angle_x"]
     frames = contents["frames"]
     
-    # Define the base path
-    envmap_dir = "data/TensoIR_Synthetic/Environment_Maps/high_res_envmaps_2k"
+    # Envmaps live next to the scene folders, e.g. ~/data/TensoIR_Synthetic/Environment_Maps
+    envmap_dir = os.path.join(os.path.dirname(args.source_path), "Environment_Maps", "high_res_envmaps_2k")
+    if not os.path.isdir(envmap_dir):
+        raise FileNotFoundError("Envmap directory not found: {}".format(envmap_dir))
 
     # List all EXR files in the directory
     hdr_files = [f+'.hdr' for f in ["bridge", "city", "fireplace", "forest", "night"]]
