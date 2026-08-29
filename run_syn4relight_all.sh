@@ -1,23 +1,23 @@
 #!/bin/bash
-# One TensoIR scene per GPU. Edit the list below, then: bash run_tensoir_all.sh
+# One Synthetic4Relight scene per GPU. Edit the list below, then: bash run_syn4relight_all.sh
 set -uo pipefail
 cd "$(dirname "$0")"
 mkdir -p logs
 
 # scene:gpu
 JOBS=(
-    armadillo:4
-    ficus:5
-    hotdog:6
-    lego:7
+    air_baloons:0
+    chair:1
+    hotdog:2
+    jugs:3
 )
 
 pids=()
 for job in "${JOBS[@]}"; do
     scene="${job%%:*}"
     gpu="${job##*:}"
-    echo "[${scene}] starting (GPU ${gpu}) -> logs/tensoir_${scene}.log"
-    SCENE="${scene}" GPU="${gpu}" bash run_tensoir.sh > "logs/tensoir_${scene}.log" 2>&1 &
+    echo "[${scene}] starting (GPU ${gpu}) -> logs/syn4_${scene}.log"
+    SCENE="${scene}" GPU="${gpu}" bash run_syn4relight.sh > "logs/syn4_${scene}.log" 2>&1 &
     pids+=($!)
 done
 
@@ -27,7 +27,7 @@ status=0
 idx=0
 for job in "${JOBS[@]}"; do
     scene="${job%%:*}"
-    wait "${pids[$idx]}" || { echo "[${scene}] failed (see logs/tensoir_${scene}.log)"; status=1; }
+    wait "${pids[$idx]}" || { echo "[${scene}] failed (see logs/syn4_${scene}.log)"; status=1; }
     idx=$((idx + 1))
 done
 

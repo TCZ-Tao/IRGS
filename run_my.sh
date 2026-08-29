@@ -1,24 +1,8 @@
-#!/bin/bash
-# Single Synthetic4Relight scene. Override via env, e.g.:
-#   SCENE=chair GPU=1 bash run_syn4relight.sh
-set -euo pipefail
-cd "$(dirname "$0")"
-
-SCENE=${SCENE:-air_baloons}
+SCENE=${SCENE:-dining_chair}
 GPU=${GPU:-0}
-DATA_ROOT=${DATA_ROOT:-$HOME/data/Synthetic4Relight}
+DATA_ROOT=${DATA_ROOT:-/ssd2/tcz/data/my}
 DATA=${DATA:-${DATA_ROOT}/${SCENE}}
-OUT=${OUT:-outputs/Synthetic4Relight/${SCENE}}
-
-LAMBDA_LIGHT=0.01
-ALBEDO_RESCALE=2
-
-case "${SCENE}" in
-    air_baloons)
-        LAMBDA_LIGHT=0.1
-        ALBEDO_RESCALE=1
-        ;;
-esac
+OUT=${OUT:-outputs/${SCENE}}
 
 # ${SCENE} on GPU ${GPU}
 CUDA_VISIBLE_DEVICES=${GPU} python train_refgaussian.py \
@@ -37,7 +21,7 @@ CUDA_VISIBLE_DEVICES=${GPU} python train.py \
     --envmap_cubemap_lr 0.01 \
     --lambda_light_smooth 0.0005 \
     --init_roughness_value 0.6 \
-    --lambda_light ${LAMBDA_LIGHT} \
+    --lambda_light 0.01 \
     -m ${OUT}/irgs --train_ray
 
 CUDA_VISIBLE_DEVICES=${GPU} python render.py \
@@ -48,10 +32,10 @@ CUDA_VISIBLE_DEVICES=${GPU} python compute_albedo_scale_syn4.py \
     -m ${OUT}/irgs
 CUDA_VISIBLE_DEVICES=${GPU} python eval_material_syn4.py \
     -m ${OUT}/irgs \
-    --no_save --no_lpips --albedo_rescale ${ALBEDO_RESCALE}
+    --no_save --no_lpips --albedo_rescale 2
 CUDA_VISIBLE_DEVICES=${GPU} python eval_relighting_syn4.py \
     -m ${OUT}/irgs \
     --diffuse_sample_num 512 \
     --light_sample_num 256 \
-    --albedo_rescale ${ALBEDO_RESCALE} \
+    --albedo_rescale 2 \
     --no_save --no_lpips -e light
